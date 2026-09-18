@@ -1,0 +1,9 @@
+{
+  "name": "dip-query",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DIP分组费率查询器（纯静态页面，日常使用直接双击 index.html 即可，无需 npm）",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}

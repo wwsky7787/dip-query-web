@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DIP 分组费率查询器（2026 版）</title>
+<style>
+  :root{
+    --primary:#0f6cbf; --primary-dark:#0a4f8c; --bg:#f4f7fa; --card:#ffffff;
+    --border:#dbe4ec; --text:#24313d; --muted:#6b7c8c; --fee:#c0392b;
+    --core-tag:#0f6cbf; --comp-tag:#7b61a8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+  .container{max-width:1080px;margin:0 auto;padding:0 16px 60px}
+
+  /* 页头 */
+  header.app{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:22px 0 18px}
+  header.app .container{padding-bottom:0}
+  header.app h1{font-size:24px;letter-spacing:1px}
+  header.app .sub{font-size:13px;opacity:.92;margin-top:6px}
+  header.app .meta{margin-top:10px;font-size:13px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+  header.app .meta .coef{background:rgba(255,255,255,.16);border-radius:4px;padding:2px 10px}
+  header.app a.anchor-link{color:#fff;text-decoration:underline;font-size:13px}
+
+  /* 检索区（吸顶） */
+  .search-bar{position:sticky;top:0;z-index:50;background:var(--bg);padding:14px 0 10px;border-bottom:1px solid var(--border)}
+  .search-box{position:relative}
+  #q{width:100%;font-size:17px;padding:12px 44px 12px 16px;border:2px solid var(--primary);border-radius:8px;outline:none;background:#fff}
+  #q:focus{box-shadow:0 0 0 3px rgba(15,108,191,.18)}
+  .search-hint{font-size:12px;color:var(--muted);margin-top:6px}
+  #dropdown{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid var(--border);border-radius:8px;
+    max-height:340px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);display:none}
+  #dropdown .item{padding:9px 14px;cursor:pointer;display:flex;gap:12px;align-items:baseline;border-bottom:1px solid #f0f4f8}
+  #dropdown .item:last-child{border-bottom:none}
+  #dropdown .item .code{font-family:Consolas,monospace;color:var(--primary);font-size:13px;white-space:nowrap}
+  #dropdown .item.active,#dropdown .item:hover{background:#eaf3fb}
+  #dropdown .more{padding:8px 14px;font-size:12px;color:var(--muted);text-align:center}
+
+  /* 结果区 */
+  .selected-info{margin:16px 0 4px;font-size:15px}
+  .selected-info .code{font-family:Consolas,monospace;color:var(--primary);font-weight:bold}
+  details.same-group{font-size:12px;color:var(--muted);margin:4px 0 10px}
+  details.same-group summary{cursor:pointer}
+  details.same-group ul{margin:6px 0 0 18px;max-height:160px;overflow-y:auto}
+
+  .result-section{margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .result-section h2{font-size:16px;padding:12px 16px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+  .result-section.core h2{background:var(--core-tag)}
+  .result-section.comp h2{background:var(--comp-tag)}
+  .result-section h2 .count{font-size:13px;font-weight:normal;opacity:.9}
+  table.result{width:100%;border-collapse:collapse;font-size:14px}
+  table.result th{background:#f0f4f8;text-align:left;padding:9px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
+  table.result td{padding:8px 12px;border-bottom:1px solid #eef2f6;vertical-align:top}
+  table.result tr:last-child td{border-bottom:none}
+  table.result tr:hover td{background:#f7fafd}
+  td.bcode{font-family:Consolas,monospace;font-size:13px;white-space:normal;word-break:break-all;max-width:300px}
+  td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  td.fee{color:var(--fee);font-weight:600}
+  .empty{padding:22px 16px;color:var(--muted);font-size:14px;text-align:center}
+  .fallback-note{font-size:12px;color:var(--muted);padding:8px 16px;background:#faf6ee;border-bottom:1px solid #f0e6cc}
+
+  /* 底部文档区 */
+  .doc-section{margin-top:48px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:26px 30px}
+  .doc-section>h2.doc-title{font-size:20px;color:var(--primary-dark);border-bottom:3px solid var(--primary);padding-bottom:10px;margin-bottom:18px}
+  .doc-section h3.doc-h1{font-size:17px;color:var(--primary-dark);margin:26px 0 10px;padding-left:10px;border-left:5px solid var(--primary)}
+  .doc-section h4.doc-h2{font-size:15px;color:var(--text);margin:18px 0 8px;padding-left:10px;border-left:4px solid #9cc3e5}
+  .doc-section p{margin:8px 0;font-size:14px}
+  .doc-section .fee{color:var(--fee);font-weight:700}
+  .doc-section table.doc-table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+  .doc-section table.doc-table th{background:var(--primary);color:#fff;padding:7px 10px;text-align:left;border:1px solid #cfdce8}
+  .doc-section table.doc-table td{padding:6px 10px;border:1px solid #dbe4ec}
+  .doc-section table.doc-table tr:nth-child(even) td{background:#f4f8fc}
+
+  footer{margin-top:30px;text-align:center;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="container">
+    <h1>DIP 分组费率查询器（2026 版）</h1>
+    <div class="sub">输入诊断名称或拼音首字母 → 选择诊断 → 按诊断编码前四位匹配核心病组、前三位匹配综合病组</div>
+    <div class="meta">
+      <span class="coef">职工付费标准 = 三级分值 × 5.69</span>
+      <span class="coef">居民付费标准 = 三级分值 × 4.36</span>
+      <a class="anchor-link" href="#doc-ref">↓ 科室入组经验参考（页底）</a>
+    </div>
+  </div>
+</header>
+
+<div class="search-bar">
+  <div class="container">
+    <div class="search-box">
+      <input id="q" type="text" autocomplete="off" placeholder="输入诊断名称（汉字）或拼音首字母，如：急性胆囊炎 或 jxdny">
+      <div id="dropdown"></div>
+    </div>
+    <div class="search-hint">输入 ≥2 个拼音首字母或 ≥1 个汉字开始实时检索；↑↓ 键选择，回车确认</div>
+  </div>
+</div>
+
+<div class="container">
+  <div id="results"></div>
+
+  <div class="doc-section" id="doc-ref">
+    <h2 class="doc-title">科室入组经验参考（甲乳血管外科）</h2>
+    <div id="doc-body"></div>
+  </div>
+
+  <footer>数据来源：湖北2.0版ICD编码库 · 2026年DIP病组目录 ｜ 本页面为纯本地工具，不上传任何数据</footer>
+</div>
+
+<script src="data/diagnoses.js"></script>
+<script src="data/core.js"></script>
+<script src="data/comprehensive.js"></script>
+<script src="data/doc.js"></script>
+<script>
+/* =====================================================================
+ * 费率系数（政策调整时修改下面两个数字即可，全页面自动按新系数计算）：
+ *   COEF_STAFF  = 职工医保系数（2026 年 = 5.69）
+ *   COEF_RESIDENT = 居民医保系数（2026 年 = 4.36）
+ * 修改后保存本文件，刷新网页即生效。
+ * ===================================================================== */
+const COEF_STAFF = 5.69;
+const COEF_RESIDENT = 4.36;
+
+const DIAGNOSES = window.DIAGNOSES;   // [[编码, 名称, 拼音首字母], ...]
+const DIP_CORE  = window.DIP_CORE;    // { 前四位: [[病种编码, 病种名称, 三级分值], ...] }
+const DIP_COMP  = window.DIP_COMP;    // { 前三位或字母: [[编码, 名称, 三级分值], ...] }
+document.getElementById('doc-body').innerHTML = window.DOC_HTML;
+
+const q = document.getElementById('q');
+const dropdown = document.getElementById('dropdown');
+const results = document.getElementById('results');
+let matches = [];
+let activeIdx = -1;
+
+const isAsciiLetter = s => /^[a-z]+$/.test(s);
+const hasHan = s => /[\u4e00-\u9fff]/.test(s);
+
+function onInput(){
+  const v = q.value.trim().toLowerCase();
+  activeIdx = -1;
+  if ((isAsciiLetter(v) && v.length >= 2) || (hasHan(v) && v.replace(/[^\u4e00-\u9fff]/g,'').length >= 1) || (v.length>=1 && hasHan(v))){
+    if (isAsciiLetter(v)){
+      matches = [];
+      for (const d of DIAGNOSES){ if (d[2].startsWith(v)){ matches.push(d); if (matches.length>=50) break; } }
+    } else if (hasHan(v)){
+      const kw = q.value.trim();
+      matches = [];
+      for (const d of DIAGNOSES){ if (d[1].includes(kw)){ matches.push(d); if (matches.length>=50) break; } }
+    } else {
+      matches = [];
+    }
+    renderDropdown();
+  } else {
+    matches = [];
+    dropdown.style.display = 'none';
+  }
+}
+
+function renderDropdown(){
+  if (!matches.length){
+    dropdown.innerHTML = '<div class="more">未找到匹配的诊断</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+  dropdown.innerHTML = matches.map((d,i)=>
+    `<div class="item${i===activeIdx?' active':''}" data-i="${i}"><span class="code">${d[0]}</span><span>${d[1]}</span></div>`
+  ).join('');
+  dropdown.style.display = 'block';
+}
+
+function moveActive(delta){
+  if (!matches.length) return;
+  activeIdx = (activeIdx + delta + matches.length) % matches.length;
+  renderDropdown();
+  const el = dropdown.querySelector('.item.active');
+  if (el) el.scrollIntoView({block:'nearest'});
+}
+
+function stripAlnum(s){ return s.replace(/[^A-Za-z0-9]/g,'').toUpperCase(); }
+function fmt(n){ return n.toLocaleString('zh-CN',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function selectDiagnosis(d){
+  dropdown.style.display = 'none';
+  q.value = d[1] + '（' + d[0] + '）';
+  renderResults(d);
+}
+
+function renderResults(d){
+  const [code, name] = d;
+  const alnum = stripAlnum(code);
+  const key4 = alnum.slice(0,4);
+  const key3 = alnum.slice(0,3);
+  const letter = alnum.charAt(0);
+
+  const coreRows = DIP_CORE[key4] || [];
+  let compRows = DIP_COMP[key3] || [];
+  let compFallback = false;
+  if (!compRows.length && DIP_COMP[letter]){
+    compRows = DIP_COMP[letter];
+    compFallback = true;
+  }
+
+  // 同组诊断（共享前四位的其他诊断）
+  const sameGroup = DIAGNOSES.filter(x => x[0]!==code && stripAlnum(x[0]).slice(0,4)===key4);
+
+  let html = `<div class="selected-info">已选诊断：<span class="code">${code}</span>　${name}
+    <span style="color:var(--muted);font-size:13px">（核心病组匹配键 ${key4} ｜ 综合病组匹配键 ${key3}）</span></div>`;
+
+  if (sameGroup.length){
+    html += `<details class="same-group"><summary>与该诊断同组（前四位 ${key4}）的诊断还有 ${sameGroup.length} 条，点击查看</summary>
+      <ul>${sameGroup.map(x=>`<li>${x[0]}　${x[1]}</li>`).join('')}</ul></details>`;
+  }
+
+  // 核心病组表
+  html += `<div class="result-section core"><h2>核心病组 <span class="count">命中 ${coreRows.length} 条</span></h2>`;
+  if (coreRows.length){
+    html += `<table class="result"><thead><tr>
+      <th>病种编码</th><th>病种名称</th><th class="num">三级分值</th>
+      <th class="num">职工付费标准</th><th class="num">居民付费标准</th></tr></thead><tbody>`;
+    for (const r of coreRows){
+      html += `<tr><td class="bcode">${r[0]}</td><td>${r[1]}</td><td class="num">${r[2].toLocaleString('zh-CN')}</td>
+        <td class="num fee">${fmt(r[2]*COEF_STAFF)}</td><td class="num fee">${fmt(r[2]*COEF_RESIDENT)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+  } else {
+    html += `<div class="empty">核心病组目录中未命中「${key4}」对应的病组</div>`;
+  }
+  html += '</div>';
+
+  // 综合病组表
+  html += `<div class="result-section comp"><h2>综合病组 <span class="count">命中 ${compRows.length} 条</span></h2>`;
+  if (compFallback){
+    html += `<div class="fallback-note">综合病组未按「${key3}」单独设组，以下按「${letter} 开头」类目兜底入组</div>`;
+  }
+  if (compRows.length){
+    html += `<table class="result"><thead><tr>
+      <th>病种编码</th><th>病种名称</th><th class="num">三级分值</th>
+      <th class="num">职工付费标准</th><th class="num">居民付费标准</th></tr></thead><tbody>`;
+    for (const r of compRows){
+      html += `<tr><td class="bcode">${r[0]}</td><td>${r[1]}</td><td class="num">${r[2].toLocaleString('zh-CN')}</td>
+        <td class="num fee">${fmt(r[2]*COEF_STAFF)}</td><td class="num fee">${fmt(r[2]*COEF_RESIDENT)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+  } else {
+    html += `<div class="empty">综合病组目录中未命中「${key3}」对应的病组</div>`;
+  }
+  html += '</div>';
+
+  results.innerHTML = html;
+  results.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+q.addEventListener('input', onInput);
+q.addEventListener('keydown', e=>{
+  if (e.key==='ArrowDown'){ e.preventDefault(); moveActive(1); }
+  else if (e.key==='ArrowUp'){ e.preventDefault(); moveActive(-1); }
+  else if (e.key==='Enter'){
+    e.preventDefault();
+    const pick = activeIdx>=0 ? matches[activeIdx] : matches[0];
+    if (pick) selectDiagnosis(pick);
+  }
+  else if (e.key==='Escape'){ dropdown.style.display='none'; }
+});
+dropdown.addEventListener('mousedown', e=>{
+  const item = e.target.closest('.item');
+  if (item) selectDiagnosis(matches[+item.dataset.i]);
+});
+document.addEventListener('click', e=>{
+  if (!e.target.closest('.search-box')) dropdown.style.display='none';
+});
+</script>
+</body>
+</html>
